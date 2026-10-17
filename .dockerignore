@@ -1,0 +1,12 @@
+# Only dependency manifests and application sources enter the build context.
+**
+!Dockerfile
+!.dockerignore
+!pyproject.toml
+!uv.lock
+!news_agent/
+!news_agent/**
+news_agent/**/__pycache__/
+news_agent/**/*.py[cod]
+news_agent/**/.env
+news_agent/**/.env.*

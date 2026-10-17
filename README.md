@@ -41,6 +41,42 @@ Invalid input returns 422, upstream/step-limit failures return 502, and a
 request timeout returns 504. Detailed failures are logged locally.
 The API is intended for local use and has no authentication.
 
+## Container deployment
+
+Build the image with Docker running:
+
+```sh
+docker build -t news-agent-app .
+```
+
+Run with Ollama on your host (Docker Desktop on macOS/Windows):
+
+```sh
+docker run --rm --name news-agent-app \
+  -p 127.0.0.1:8001:8001 \
+  -e OLLAMA_MODEL=qwen3:8b \
+  -e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
+  news-agent-app
+```
+
+Ollama must already be running with the model installed, and must accept
+connections from Docker. `127.0.0.1` inside the container refers to the container,
+not your host. On Linux, add `--add-host=host.docker.internal:host-gateway` and
+configure Ollama to listen on a host interface reachable from Docker. Restrict
+access to the Ollama port to trusted clients. For a separate Ollama container on
+the same Docker network, use its service name, e.g. `http://ollama:11434`.
+
+The image contains the API and its MCP subprocess, runs as a non-root user,
+and installs production dependencies from `uv.lock`. It does not include Ollama,
+model weights, `.env`, local environments, Git metadata, or tests. Supply settings
+at runtime using `-e` or `--env-file`; override any host-only Ollama URL.
+The API listens on container port 8001; the example publishes it only on host
+localhost because it has no authentication. Use an authenticated gateway if
+deploying for remote access. No MCP port needs to be published.
+
+The container health check queries `/openapi.json` to verify the API is serving;
+it does not test Ollama inference or internet news retrieval.
+
 ## News MCP tool
 
 Start the stdio server:

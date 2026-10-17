@@ -53,6 +53,20 @@ relying on historical validation notes. Never record secrets or `.env` contents.
   `AGENT_TIMEOUT_SECONDS` (180), and `AGENT_RECURSION_LIMIT` (12).
 - Keep the API bound to localhost by default; it has no authentication.
 
+## Container deployment
+
+- `Dockerfile` uses Python 3.14 slim, a uv dependency build stage with
+  `uv sync --locked --no-dev --no-install-project`, and a non-root runtime.
+- `.dockerignore` allowlists application source and dependency manifests only;
+  never bake `.env`, virtual environments, or model weights into the image.
+- Build: `docker build -t news-agent-app .`. Container API port: 8001.
+- Pass required Ollama settings at runtime. For Docker Desktop host Ollama,
+  use `http://host.docker.internal:11434`; container localhost is not the host.
+- The image runs both API and MCP subprocess; Ollama is a separate service.
+- Health check verifies `/openapi.json`, not inference or news provider health.
+- Validated on 2026-10-17: image build, non-root API startup with MCP tool
+  discovery, HTTP 200 OpenAPI schema, and exclusion of `.env`; 13 tests passed.
+
 ## Commands and validation
 
 - Install: `uv sync`.
