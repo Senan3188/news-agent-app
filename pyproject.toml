@@ -1,0 +1,18 @@
+[project]
+name = "news-agent-app"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.143.3",
+    "feedparser>=6.0.14",
+    "httpx>=0.28.1",
+    "langchain>=1.4.6",
+    "langgraph>=1.2.16",
+    "mcp>=1.26,<2",
+    "pydantic>=2.14.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
