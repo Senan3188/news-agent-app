@@ -7,9 +7,13 @@ dependencies = [
     "feedparser>=6.0.14",
     "httpx>=0.28.1",
     "langchain>=1.4.6",
+    "langchain-mcp-adapters>=0.3.2",
+    "langchain-ollama>=1.1.0",
     "langgraph>=1.2.16",
     "mcp>=1.26,<2",
     "pydantic>=2.14.1",
+    "pydantic-settings>=2.16.0",
+    "uvicorn>=0.54.0",
 ]
 
 [dependency-groups]
