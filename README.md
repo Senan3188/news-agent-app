@@ -9,6 +9,8 @@ Ensure Ollama is running (`ollama serve` if needed), then install the model:
 ```sh
 ollama pull qwen3:8b
 uv sync
+# First setup only: copy the template if .env does not already exist.
+cp -n .env.example .env
 uv run uvicorn news_agent.api:app --host 127.0.0.1 --port 8001
 ```
 
@@ -28,9 +30,13 @@ objects from MCP tool calls). Tool selection is made by the model. Each request
 starts a fresh conversation; chat history is not persisted. Interactive API
 documentation is available at `http://127.0.0.1:8001/docs`.
 
-Optional settings are listed in `.env.example`; put overrides in your `.env`.
-Defaults are `OLLAMA_MODEL=qwen3:8b`, `OLLAMA_BASE_URL=http://127.0.0.1:11434`,
-`AGENT_TIMEOUT_SECONDS=180`, and `AGENT_RECURSION_LIMIT=12`.
+Set `OLLAMA_MODEL` and `OLLAMA_BASE_URL` in `.env` or the process environment.
+Both are required; missing or blank values stop API startup with a validation
+error. `.env.example` supplies `qwen3:8b` and `http://127.0.0.1:11434` for local
+setup. Process environment values override `.env`. If `.env` already exists,
+add these entries to it without replacing your other settings.
+Optional settings default to `AGENT_TIMEOUT_SECONDS=180` and
+`AGENT_RECURSION_LIMIT=12`.
 Invalid input returns 422, upstream/step-limit failures return 502, and a
 request timeout returns 504. Detailed failures are logged locally.
 The API is intended for local use and has no authentication.

@@ -28,11 +28,10 @@ class AgentResponse(BaseModel):
 
 
 def create_app(settings: Settings | None = None, runtime_factory=agent_runtime) -> FastAPI:
-    settings = settings or Settings()
-
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        async with runtime_factory(settings) as graph:
+        app.state.settings = settings if settings is not None else Settings()
+        async with runtime_factory(app.state.settings) as graph:
             app.state.graph = graph
             yield
 
@@ -40,6 +39,7 @@ def create_app(settings: Settings | None = None, runtime_factory=agent_runtime) 
 
     @app.post("/agent", response_model=AgentResponse)
     async def run_agent(body: AgentRequest, request: Request) -> AgentResponse:
+        settings = request.app.state.settings
         try:
             async with asyncio.timeout(settings.agent_timeout_seconds):
                 state = await request.app.state.graph.ainvoke(

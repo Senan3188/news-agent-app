@@ -16,6 +16,13 @@ from news_agent.config import PROJECT_ROOT, Settings
 from news_agent.news import NewsResult
 
 
+def api_settings(**overrides):
+    return Settings(
+        _env_file=None, ollama_model="qwen3:8b",
+        ollama_base_url="http://127.0.0.1:11434", **overrides,
+    )
+
+
 def test_graph_calls_tool_then_returns_to_model():
     calls = []
 
@@ -64,7 +71,7 @@ def test_api_response_and_request_isolation():
                 artifact={"structured_content": news.model_dump(mode="json")},
             ), AIMessage(content="No recent articles.")]}
 
-    with TestClient(create_app(Settings(), runtime_for(Graph()))) as client:
+    with TestClient(create_app(api_settings(), runtime_for(Graph()))) as client:
         for _ in range(2):
             response = client.post("/agent", json={"message": "Get AI news"})
             assert response.status_code == 200
@@ -81,7 +88,7 @@ def test_api_failure_responses():
             async def ainvoke(self, state, config):
                 raise error
 
-        with TestClient(create_app(Settings(), runtime_for(Graph()))) as client:
+        with TestClient(create_app(api_settings(), runtime_for(Graph()))) as client:
             response = client.post("/agent", json={"message": "News?"})
             assert response.status_code == code
             assert "private details" not in response.text
@@ -92,7 +99,7 @@ def test_api_deadline_cancels_slow_graph():
         async def ainvoke(self, state, config):
             await asyncio.sleep(10)
 
-    settings = Settings(agent_timeout_seconds=0.01)
+    settings = api_settings(agent_timeout_seconds=0.01)
     with TestClient(create_app(settings, runtime_for(Graph()))) as client:
         response = client.post("/agent", json={"message": "News?"})
         assert response.status_code == 504

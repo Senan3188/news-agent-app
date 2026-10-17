@@ -36,8 +36,10 @@ relying on historical validation notes. Never record secrets or `.env` contents.
 
 - `news_agent/agent.py` builds an explicit LangGraph `agent -> tools -> agent`
   loop. Tool selection is made by the model; the graph ends on a final answer.
-- Use local Ollama `qwen3:8b` through `langchain-ollama`, with temperature 0
-  and reasoning disabled. Ollama runs at `http://127.0.0.1:11434` by default.
+- Use local Ollama through `langchain-ollama`, with temperature 0 and reasoning
+  disabled. Set required `OLLAMA_MODEL` and `OLLAMA_BASE_URL` via `.env` or the
+  process environment; do not hardcode Python defaults. `.env.example` uses
+  `qwen3:8b` and `http://127.0.0.1:11434` for local setup.
 - `langchain-mcp-adapters` discovers the news tool over a real MCP stdio
   session. The FastAPI lifespan starts and stops the MCP subprocess using the
   current Python interpreter. A separate MCP server is not needed for the API.
@@ -66,6 +68,9 @@ relying on historical validation notes. Never record secrets or `.env` contents.
   and MCP structured output.
 - `tests/test_agent_api.py` covers graph routing, API validation/errors, request
   isolation, deadline cancellation, and actual MCP subprocess tool discovery.
+- `tests/test_config.py` covers required Ollama settings, `.env` loading,
+  environment precedence, and rejection of blank values. Settings are validated
+  at API startup; importing the app does not require a configured environment.
 - On 2026-10-17, all nine tests passed and a live `POST /agent` call returned
   HTTP 200 using local `qwen3:8b`, an MCP news tool call, and two news articles.
   Rerun appropriate checks after code changes; live tests need Ollama and internet.
