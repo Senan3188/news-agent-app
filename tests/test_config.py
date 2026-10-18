@@ -6,6 +6,7 @@ from news_agent.config import Settings
 
 @pytest.fixture(autouse=True)
 def clear_ollama_environment(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://unused/test")
     monkeypatch.delenv("OLLAMA_MODEL", raising=False)
     monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
 

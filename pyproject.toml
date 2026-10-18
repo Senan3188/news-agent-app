@@ -11,6 +11,7 @@ dependencies = [
     "langchain-ollama>=1.1.0",
     "langgraph>=1.2.16",
     "mcp>=1.26,<2",
+    "psycopg[binary,pool]>=3.3.6",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.0",
     "uvicorn>=0.54.0",

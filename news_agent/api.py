@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class AgentRequest(BaseModel):
+    user_id: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=128)]
     message: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=8000)]
 
 
@@ -43,7 +44,7 @@ def create_app(settings: Settings | None = None, runtime_factory=agent_runtime) 
         try:
             async with asyncio.timeout(settings.agent_timeout_seconds):
                 state = await request.app.state.graph.ainvoke(
-                    {"messages": [HumanMessage(content=body.message)]},
+                    {"user_id": body.user_id, "messages": [HumanMessage(content=body.message)]},
                     config={"recursion_limit": settings.agent_recursion_limit},
                 )
             final = state["messages"][-1]
@@ -62,7 +63,7 @@ def create_app(settings: Settings | None = None, runtime_factory=agent_runtime) 
         except Exception as exc:
             logger.exception("News agent request failed")
             raise HTTPException(
-                502, "Agent failed. Check Ollama, the installed model, and the news provider."
+                502, "Agent failed. Check PostgreSQL, Ollama, the installed model, and the news provider."
             ) from exc
 
     return app

@@ -18,7 +18,7 @@ from news_agent.news import NewsResult
 
 def api_settings(**overrides):
     return Settings(
-        _env_file=None, ollama_model="qwen3:8b",
+        _env_file=None, database_url="postgresql://unused/test", ollama_model="qwen3:8b",
         ollama_base_url="http://127.0.0.1:11434", **overrides,
     )
 
@@ -73,12 +73,15 @@ def test_api_response_and_request_isolation():
 
     with TestClient(create_app(api_settings(), runtime_for(Graph()))) as client:
         for _ in range(2):
-            response = client.post("/agent", json={"message": "Get AI news"})
+            response = client.post("/agent", json={"user_id": "test-user", "message": "Get AI news"})
             assert response.status_code == 200
             assert response.json()["model"] == "qwen3:8b"
             assert response.json()["news_results"][0]["query"] == "AI"
         for message in ("", "   ", "x" * 8001):
-            assert client.post("/agent", json={"message": message}).status_code == 422
+            assert client.post("/agent", json={"user_id": "test-user", "message": message}).status_code == 422
+        for body in ({"message": "News?"}, {"user_id": " ", "message": "News?"},
+                     {"user_id": "x" * 129, "message": "News?"}):
+            assert client.post("/agent", json=body).status_code == 422
 
 
 def test_api_failure_responses():
@@ -89,7 +92,7 @@ def test_api_failure_responses():
                 raise error
 
         with TestClient(create_app(api_settings(), runtime_for(Graph()))) as client:
-            response = client.post("/agent", json={"message": "News?"})
+            response = client.post("/agent", json={"user_id": "test-user", "message": "News?"})
             assert response.status_code == code
             assert "private details" not in response.text
 
@@ -101,7 +104,7 @@ def test_api_deadline_cancels_slow_graph():
 
     settings = api_settings(agent_timeout_seconds=0.01)
     with TestClient(create_app(settings, runtime_for(Graph()))) as client:
-        response = client.post("/agent", json={"message": "News?"})
+        response = client.post("/agent", json={"user_id": "test-user", "message": "News?"})
         assert response.status_code == 504
 
 

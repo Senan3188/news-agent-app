@@ -11,8 +11,12 @@ ollama pull qwen3:8b
 uv sync
 # First setup only: copy the template if .env does not already exist.
 cp -n .env.example .env
+docker compose up -d db
 uv run uvicorn news_agent.api:app --host 127.0.0.1 --port 8001
 ```
+
+Ensure `.env` contains the PostgreSQL settings from `.env.example` before
+starting the database and API.
 
 The API automatically starts and stops the news MCP subprocess. No separate
 MCP server command is needed. The LangGraph flow is `agent -> tools -> agent`,
@@ -22,12 +26,13 @@ local; news retrieval requires internet access.
 ```sh
 curl http://127.0.0.1:8001/agent \
   -H 'Content-Type: application/json' \
-  -d '{"message":"Find the latest AI news and cite the sources."}'
+  -d '{"user_id":"senan","message":"Find the latest AI news and cite the sources."}'
 ```
 
 `POST /agent` returns `answer`, `model`, and `news_results` (validated news
-objects from MCP tool calls). Tool selection is made by the model. Each request
-starts a fresh conversation; chat history is not persisted. Interactive API
+objects from MCP tool calls). Tool selection is made by the model. Completed
+exchanges are persisted in PostgreSQL per `user_id` and recalled on later
+requests, including after API restarts. Interactive API
 documentation is available at `http://127.0.0.1:8001/docs`.
 
 Set `OLLAMA_MODEL` and `OLLAMA_BASE_URL` in `.env` or the process environment.
@@ -54,6 +59,7 @@ Run with Ollama on your host (Docker Desktop on macOS/Windows):
 ```sh
 docker run --rm --name news-agent-app \
   -p 127.0.0.1:8001:8001 \
+  -e DATABASE_URL=postgresql://news:local-development-only@host.docker.internal:5432/news_agent \
   -e OLLAMA_MODEL=qwen3:8b \
   -e OLLAMA_BASE_URL=http://host.docker.internal:11434 \
   news-agent-app
@@ -128,3 +134,50 @@ An empty list means no usable articles matched the age window. Provider HTTP
 failures and invalid feeds produce tool errors. News content is untrusted data.
 
 Run tests with `uv run pytest`.
+
+## PostgreSQL memory
+
+`DATABASE_URL` is required. Set it in `.env` for local runs and use the database
+hostname `db` in `DOCKER_DATABASE_URL` for Compose. Set `POSTGRES_PASSWORD` and
+use the same password in both URLs (URL-encode special characters). The example
+password is for local development only. On an existing `.env`, add the new
+entries from `.env.example` without replacing your Ollama settings.
+
+```sh
+# Start PostgreSQL alone for running the API with uv:
+docker compose up -d db
+# Or start the API and PostgreSQL together:
+docker compose up --build -d
+```
+
+The `postgres_data` named volume retains memory across container restarts and
+`docker compose down`. Removing that volume deletes the stored memory. The API
+automatically creates the `agent_memory` table and index; its database role needs
+permission to create them. Startup fails if PostgreSQL is unavailable.
+
+Every successful exchange saves the original user message and final answer.
+Before inference, the graph reloads the latest `MEMORY_RECENT_TURNS` exchanges
+(default 5, maximum 10) for the supplied `user_id`. Recalled messages are limited
+to 1200 characters each; full records remain stored. This is persistent recent
+conversation memory, not semantic search or automatic preference extraction.
+Failed generation is not stored; memory write failures fail the request. News
+must still be fetched fresh. Concurrent requests can finish in a different order;
+recall follows database insertion order, not a serialized conversation queue.
+
+Use a stable `user_id` to retain context, for example:
+
+```json
+{"user_id": "senan", "message": "Remember that I prefer Belgian technology news."}
+```
+
+`user_id` is required and limited to 128 characters. It partitions database
+queries but is not authentication: anyone who can call this unauthenticated API
+can supply another user's ID. Keep it local or put it behind authentication that
+binds the ID to the caller before a shared deployment. Conversations are retained
+until deleted from PostgreSQL; no automatic retention cleanup is configured.
+
+Run PostgreSQL integration tests against a disposable database with:
+
+```sh
+TEST_DATABASE_URL=postgresql://user:password@localhost:5432/test_db uv run pytest
+```

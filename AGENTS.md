@@ -34,8 +34,8 @@ relying on historical validation notes. Never record secrets or `.env` contents.
 
 ## Agent and API
 
-- `news_agent/agent.py` builds an explicit LangGraph `agent -> tools -> agent`
-  loop. Tool selection is made by the model; the graph ends on a final answer.
+- `news_agent/agent.py` builds `recall -> agent -> tools -> agent -> remember`.
+  The tool loop repeats as needed; a final answer proceeds to memory storage.
 - Use local Ollama through `langchain-ollama`, with temperature 0 and reasoning
   disabled. Set required `OLLAMA_MODEL` and `OLLAMA_BASE_URL` via `.env` or the
   process environment; do not hardcode Python defaults. `.env.example` uses
@@ -43,9 +43,21 @@ relying on historical validation notes. Never record secrets or `.env` contents.
 - `langchain-mcp-adapters` discovers the news tool over a real MCP stdio
   session. The FastAPI lifespan starts and stops the MCP subprocess using the
   current Python interpreter. A separate MCP server is not needed for the API.
-- `news_agent/api.py` exposes `POST /agent` with body `{"message":"..."}`.
+- `news_agent/api.py` exposes `POST /agent` with body `{"user_id":"...","message":"..."}`.
   Responses contain `answer`, `model`, and `news_results` validated as NewsResult.
-- Requests are stateless and isolated; no conversation persistence is implemented.
+- `news_agent/memory.py` persists completed exchanges per required `user_id` in
+  PostgreSQL. The graph recalls recent exchanges before inference and saves only
+  final answers. Latest 5 turns (configurable 1–10), 1200 recalled characters per
+  message; full records remain stored. This is recent-history recall, not semantic search.
+- `DATABASE_URL` is required and secret; `MEMORY_RECENT_TURNS` defaults to 5.
+  Pool/table/index setup occurs at startup; database failures are not hidden.
+- IDs namespace memory but are not authentication. Protect shared deployments.
+- `user_id` is required, trimmed, and limited to 128 characters. Reuse it across
+  requests to recall context. Failed generation is not saved; a database write
+  failure fails the request. Concurrent exchanges follow insertion order.
+- Memory uses psycopg async pooling and parameterized SQL in `agent_memory`.
+  Full exchanges remain until explicitly deleted; no retention cleanup or
+  semantic retrieval is implemented. Old answers are not fresh news evidence.
 - Input is trimmed and limited to 1–8000 characters. Invalid input returns 422,
   upstream or graph step-limit failures return 502, and timeouts return 504.
 - `news_agent/config.py` loads optional `.env` overrides via pydantic-settings.
@@ -63,6 +75,12 @@ relying on historical validation notes. Never record secrets or `.env` contents.
 - Pass required Ollama settings at runtime. For Docker Desktop host Ollama,
   use `http://host.docker.internal:11434`; container localhost is not the host.
 - The image runs both API and MCP subprocess; Ollama is a separate service.
+- `compose.yaml` runs API + PostgreSQL 17 with the `postgres_data` named volume.
+  Set `POSTGRES_PASSWORD` and matching `DATABASE_URL` (host) and
+  `DOCKER_DATABASE_URL` (Compose, hostname `db`) in `.env`. URL-encode passwords.
+- Start all services: `docker compose up --build -d`. For a host API, start only
+  PostgreSQL with `docker compose up -d db`. Do not remove the database volume
+  unless intentionally deleting stored conversations.
 - Health check verifies `/openapi.json`, not inference or news provider health.
 - Validated on 2026-10-17: image build, non-root API startup with MCP tool
   discovery, HTTP 200 OpenAPI schema, and exclusion of `.env`; 13 tests passed.
@@ -88,3 +106,10 @@ relying on historical validation notes. Never record secrets or `.env` contents.
 - On 2026-10-17, all nine tests passed and a live `POST /agent` call returned
   HTTP 200 using local `qwen3:8b`, an MCP news tool call, and two news articles.
   Rerun appropriate checks after code changes; live tests need Ollama and internet.
+
+- `tests/test_memory.py` covers recall, user isolation, and unsuccessful runs.
+  Set `TEST_DATABASE_URL` to a disposable PostgreSQL database to also run the
+  persistence-across-pools integration test; otherwise that test is skipped.
+- On 2026-10-18, all 16 tests passed with real PostgreSQL, including persistence
+  after reopening the pool and user isolation. Container build and API startup
+  with PostgreSQL + MCP succeeded. Temporary test containers were removed.
